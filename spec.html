@@ -272,6 +272,220 @@ contributors: Gus Caplan
       </emu-clause>
     </emu-clause>
 
+    <emu-clause id="sec-builtingenerator-objects">
+      <h1>BuiltinGenerator </h1>
+      <p>BuiltinGenerator objects </p>
+
+      <emu-clause id="sec-properties-of-builtingenerator-instances">
+        <h1>Properties of BuiltinGenerator Instances</h1>
+        <p>BuiltinGenerator instances are initially created with the internal slots described in <emu-xref href="#table-56"></emu-xref>.</p>
+        <emu-table id="table-56" caption="Internal Slots of BuiltinGenerator Instances">
+          <table>
+            <tbody>
+            <tr>
+              <th>
+                Internal Slot
+              </th>
+              <th>
+                Description
+              </th>
+            </tr>
+            <tr>
+              <td>
+                [[BuiltinGeneratorState]]
+              </td>
+              <td>
+                The current execution state of the generator. The possible values are: *undefined*, ~suspendedStart~, ~suspendedYield~, ~executing~, and ~completed~.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                [[BuiltinGeneratorContext]]
+              </td>
+              <td>
+                The execution context that is used when executing the code of this generator.
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </emu-table>
+      </emu-clause>
+
+      <emu-clause id="sec-builtingenerator-abstract-operations">
+        <h1>BuiltinGenerator Abstract Operations</h1>
+
+        <emu-clause id="sec-builtingeneratorstart" aoid="BuiltinGeneratorStart">
+          <h1>BuiltinGeneratorStart ( _generator_, _generatorBody_ )</h1>
+          <p>The abstract operation BuiltinGeneratorStart takes arguments _generator_ and _generatorBody_. It performs the following steps when called:</p>
+          <emu-alg>
+            1. Assert: The value of _generator_.[[BuiltinGeneratorState]] is *undefined*.
+            1. Let _genContext_ be the running execution context.
+            1. Set the BuiltinGenerator component of _genContext_ to _generator_.
+            1. Set the code evaluation state of _genContext_ such that when evaluation is resumed for that execution context the following steps will be performed:
+              1. Let _result_ be the result of evaluating _generatorBody_.
+              1. Assert: If we return here, the generator either threw an exception or performed either an implicit or explicit return.
+              1. Remove _genContext_ from the execution context stack and restore the execution context that is at the top of the execution context stack as the running execution context.
+              1. Set _generator_.[[BuiltinGeneratorState]] to ~completed~.
+              1. Once a generator enters the ~completed~ state it never leaves it and its associated execution context is never resumed. Any execution state associated with _generator_ can be discarded at this point.
+              1. If _result_.[[Type]] is ~normal~, let _resultValue_ be *undefined*.
+              1. Else if _result_.[[Type]] is ~return~, let _resultValue_ be _result_.[[Value]].
+              1. Else,
+                1. Assert: _result_.[[Type]] is ~throw~.
+                1. Return Completion(_result_).
+              1. Return CreateIterResultObject(_resultValue_, *true*).
+            1. Set _generator_.[[BuiltinGeneratorContext]] to _genContext_.
+            1. Set _generator_.[[BuiltinGeneratorState]] to ~suspendedStart~.
+            1. Return NormalCompletion(*undefined*).
+          </emu-alg>
+        </emu-clause>
+
+        <emu-clause id="sec-builtingeneratorvalidate" aoid="BuiltinGeneratorValidate">
+          <h1>BuiltinGeneratorValidate ( _generator_ )</h1>
+          <p>The abstract operation BuiltinGeneratorValidate takes argument _generator_. It performs the following steps when called:</p>
+          <emu-alg>
+            1. Assert: _generator_ has both [[BuiltinGeneratorState]] and [[InternalGeneratorContext]] internal slots.
+            1. Let _state_ be _generator_.[[BuiltinGeneratorState]].
+            1. If _state_ is ~executing~, throw a *TypeError* exception.
+            1. Return _state_.
+          </emu-alg>
+        </emu-clause>
+
+        <emu-clause id="sec-builtingeneratorresume" aoid="BuiltinGeneratorResume">
+          <h1>BuiltinGeneratorResume ( _generator_, _value_ )</h1>
+          <p>The abstract operation BuiltinGeneratorResume takes arguments _generator_ and _value_. It performs the following steps when called:</p>
+          <emu-alg>
+            1. Let _state_ be ? BuiltinGeneratorValidate(_generator_).
+            1. If _state_ is ~completed~, return CreateIterResultObject(*undefined*, *true*).
+            1. Assert: _state_ is either ~suspendedStart~ or ~suspendedYield~.
+            1. Let _genContext_ be _generator_.[[BuiltinGeneratorContext]].
+            1. Let _methodContext_ be the running execution context.
+            1. Suspend _methodContext_.
+            1. Set _generator_.[[BuiltinGeneratorState]] to ~executing~.
+            1. Push _genContext_ onto the execution context stack; _genContext_ is now the running execution context.
+            1. Resume the suspended evaluation of _genContext_ using NormalCompletion(_value_) as the result of the operation that suspended it. Let _result_ be the value returned by the resumed computation.
+            1. Assert: When we return here, _genContext_ has already been removed from the execution context stack and _methodContext_ is the currently running execution context.
+            1. Return Completion(_result_).
+          </emu-alg>
+        </emu-clause>
+
+        <emu-clause id="sec-builtingeneratorresumeabrupt" aoid="BuiltinGeneratorResumeAbrupt">
+          <h1>BuiltinGeneratorResumeAbrupt ( _generator_, _abruptCompletion_ )</h1>
+          <p>The abstract operation BuiltinGeneratorResumeAbrupt takes arguments _generator_ and _abruptCompletion_. It performs the following steps when called:</p>
+          <emu-alg>
+            1. Let _state_ be ? BuiltinGeneratorValidate(_generator_).
+            1. If _state_ is ~suspendedStart~, then
+              1. Set _generator_.[[BuiltinGeneratorState]] to ~completed~.
+              1. Once a generator enters the ~completed~ state it never leaves it and its associated execution context is never resumed. Any execution state associated with _generator_ can be discarded at this point.
+              1. Set _state_ to ~completed~.
+            1. If _state_ is ~completed~, then
+              1. If _abruptCompletion_.[[Type]] is ~return~, then
+                1. Return CreateIterResultObject(_abruptCompletion_.[[Value]], *true*).
+              1. Return Completion(_abruptCompletion_).
+            1. Assert: _state_ is ~suspendedYield~.
+            1. Let _genContext_ be _generator_.[[BuiltinGeneratorContext]].
+            1. Let _methodContext_ be the running execution context.
+            1. Suspend _methodContext_.
+            1. Set _generator_.[[BuiltinGeneratorState]] to ~executing~.
+            1. Push _genContext_ onto the execution context stack; _genContext_ is now the running execution context.
+            1. Resume the suspended evaluation of _genContext_ using _abruptCompletion_ as the result of the operation that suspended it. Let _result_ be the completion record returned by the resumed computation.
+            1. Assert: When we return here, _genContext_ has already been removed from the execution context stack and _methodContext_ is the currently running execution context.
+            1. Return Completion(_result_).
+          </emu-alg>
+        </emu-clause>
+
+        <emu-clause id="sec-builtingeneratoryield" aoid="BuiltinGeneratorYield">
+          <h1>BuiltinGeneratorYield ( _iterNextObj_ )</h1>
+          <p>The abstract operation BuiltinGeneratorYield takes argument _iterNextObj_. It performs the following steps when called:</p>
+          <emu-alg>
+            1. Assert: _iterNextObj_ is an Object that implements the <i>IteratorResult</i> interface.
+            1. Let _genContext_ be the running execution context.
+            1. Assert: _genContext_ is the execution context of an built-in generator.
+            1. Let _generator_ be the value of the BuiltinGenerator component of _genContext_.
+            1. Set _generator_.[[BuiltinGeneratorState]] to ~suspendedYield~.
+            1. Remove _genContext_ from the execution context stack and restore the execution context that is at the top of the execution context stack as the running execution context.
+            1. Set the code evaluation state of _genContext_ such that when evaluation is resumed with a Completion _resumptionValue_ the following steps will be performed:
+              1. Return _resumptionValue_.
+              1. NOTE: This returns to the evaluation of the |YieldExpression| that originally called this abstract operation.
+            1. Return NormalCompletion(_iterNextObj_).
+            1. NOTE: This returns to the evaluation of the operation that had most previously resumed evaluation of _genContext_.
+          </emu-alg>
+        </emu-clause>
+
+        <emu-clause id="sec-yield" aoid="Yield">
+          <h1>Yield</h1>
+          <p>Algorithm steps that say</p>
+          <emu-alg>
+            1. Let _completion_ be Yield(_value_).
+          </emu-alg>
+          <p>mean the same thing as:</p>
+          <emu-alg>
+            1. Let _iterResult_ be CreateIterResultObject(_value_, *false*).
+            1. Set _completion_ to BuiltinGeneratorYield(_iterResult_).
+          </emu-alg>
+          <p>where all aliases in the above steps, with the exception of _completion_, are ephemeral and visible only in the steps pertaining to Yield.</p>
+        </emu-clause>
+      </emu-clause>
+    </emu-clause>
+
+    <emu-clause id="sec-iteratorhelperprototype-object">
+      <h1>The %IteratorHelperPrototype% Object</h1>
+      <p>The %IteratorHelperPrototype% object:</p>
+      <ul>
+        <li>has a [[Prototype]] internal slot whose value is %IteratorPrototype%.</li>
+        <li>is an ordinary object.</li>
+      </ul>
+
+      <emu-clause id="sec-createiteratorhelper">
+        <h1>CreateIteratorHelper ( _body_ )</h1>
+        <p>The abstract operation CreateIteratorHelper takes argument _body_. It performs the following steps when called:</p>
+        <emu-alg>
+          1. Let _iteratorHelper_ be ! OrdinaryObjectCreate(%IteratorHelperPrototype%, &laquo; [[IteratorHelperBuiltinGenerator]] &raquo;).
+          1. Let _builtinGenerator_ be ! OrdinaryObjectCreate(*null*, &laquo; [[BuiltinGeneratorState]], [[BuiltinGeneratorContext]] &raquo; ).
+          1. Perform ! BuiltinGeneratorStart(_builtinGenerator_, _body_).
+          1. Set _iteratorHelper_.[[IteratorHelperBuiltinGenerator]] to _builtinGenerator_.
+          1. Return _iteratorHelper_.
+        </emu-alg>
+      </emu-clause>
+
+      <emu-clause id="sec-iteratorhelperprototype.next">
+        <h1>%IteratorHelperPrototype%.next ( _value_ )</h1>
+        <p>The `next` method performs the following steps:</p>
+        <emu-alg>
+          1. Let _O_ be the *this* value.
+          1. Perform ? RequireInternalSlot(_O_, [[IteratorHelperBuiltinGenerator]]).
+          1. Return ? BuiltinGeneratorResume(_O_.[[IteratorHelperInternalGenerator]], _value_).
+        </emu-alg>
+      </emu-clause>
+
+      <emu-clause id="sec-iteratorhelperprototype.return">
+        <h1>%IteratorHelperPrototype%.return ( _value_ )</h1>
+        <p>The `return` method performs the following steps:</p>
+        <emu-alg>
+          1. Let _O_ be the *this* value.
+          1. Perform ? RequireInternalSlot(_O_, [[IteratorHelperBuiltinGenerator]]).
+          1. Let _C_ be Completion { [[Type]]: ~return~, [[Value]]: _value_, [[Target]]: ~empty~ }.
+          1. Return ? BuiltinGeneratorResumeAbrupt(_O_.[[IteratorHelperInternalGenerator]], _C_).
+        </emu-alg>
+      </emu-clause>
+
+      <emu-clause id="sec-iteratorhelperprototype.throw">
+        <h1>%IteratorHelperPrototype%.throw ( _exception_ )</h1>
+        <p>The `throw` method performs the following steps:</p>
+        <emu-alg>
+          1. Let _O_ be the *this* value.
+          1. Perform ? RequireInternalSlot(_O_, [[IteratorHelperBuiltinGenerator]]).
+          1. Let _C_ be ThrowCompletion(_exception_).
+          1. Return ? BuiltinGeneratorResumeAbrupt(_O_.[[IteratorHelperInternalGenerator]], _C_).
+        </emu-alg>
+      </emu-clause>
+
+      <emu-clause id="sec-iteratorhelperprototype-@@tostringtag">
+        <h1>IteratorHelperPrototype [ @@toStringTag ]</h1>
+        <p>The initial value of the @@toStringTag property is the String value *"Iterator Helper"*.</p>
+        <p>This property has the attributes { [[Writable]]: *false*, [[Enumerable]]: *false*, [[Configurable]]: *true* }.</p>
+      </emu-clause>
+    </emu-clause>
+
     <emu-clause id="sec-%iteratorprototype%-object">
       <h1>The <dfn>%Iterator.prototype%</dfn> Object</h1>
 
